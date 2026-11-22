@@ -2,7 +2,8 @@ import os
 from dotenv import load_dotenv
 
 # import namespaces
-
+from openai import OpenAI
+from azure.identity import DefaultAzureCredential, get_bearer_token_provider
 
 
 def main(): 
@@ -16,10 +17,17 @@ def main():
         model_deployment = os.getenv("MODEL_DEPLOYMENT")
 
         # Initialize the OpenAI client
-        
+        token_provider=get_bearer_token_provider(
+            DefaultAzureCredential(), "https://ai.azure.com/.default"
+        )
+        openai_client=OpenAI(
+            base_url=azure_openai_endpoint,
+            api_key=token_provider
+        )
 
 
         # Loop until the user wants to quit
+        last_response_id=None
         while True:
             input_text = input('\nEnter a prompt (or type "quit" to exit): ')
             if input_text.lower() == "quit":
@@ -29,6 +37,20 @@ def main():
                 continue
 
             # Get a response
+            stream=openai_client.responses.create(
+                model=model_deployment,
+                instructions="You are a helpful AI assistance",
+                input=input_text,
+                previous_response_id=last_response_id,
+                stream=True
+            )
+            for event in stream:
+                if event.type=="response.output_text.delta":
+                    print(event.delta,end="")
+                elif event.type=="response.completed":
+                    last_response_id=event.response.id
+            print()
+                
             
 
     except Exception as ex:
